@@ -6,74 +6,93 @@ pub const Plane = struct {
 };
 
 pub const Frustum = struct {
-    planes: [6]Plane = [_]Plane{undefined} ** 6,
+    planes: [6]rl.Vector4 = [_]rl.Vector4{undefined} ** 6,
+
+    pub fn init(camera: rl.Camera3D, screen_width: f32, screen_height: f32) Frustum {
+        const view = rl.getCameraMatrix(camera);
+        const aspect = screen_width / screen_height;
+        const projection = rl.Matrix.perspective(camera.fovy, aspect, 0.01, 1000.0);
+        const mat = view.multiply(projection);
+        var frustum = Frustum{};
+
+        // Extract planes (column-major order)
+        // Left plane
+        frustum.planes[0] = .{
+            .x = mat.m3 + mat.m0,
+            .y = mat.m7 + mat.m4,
+            .z = mat.m11 + mat.m8,
+            .w = mat.m15 + mat.m12,
+        };
+        // Right plane
+        frustum.planes[1] = .{
+            .x = mat.m3 - mat.m0,
+            .y = mat.m7 - mat.m4,
+            .z = mat.m11 - mat.m8,
+            .w = mat.m15 - mat.m12,
+        };
+        // Bottom plane
+        frustum.planes[2] = .{
+            .x = mat.m3 + mat.m1,
+            .y = mat.m7 + mat.m5,
+            .z = mat.m11 + mat.m9,
+            .w = mat.m15 + mat.m13,
+        };
+        // Top plane
+        frustum.planes[3] = .{
+            .x = mat.m3 - mat.m1,
+            .y = mat.m7 - mat.m5,
+            .z = mat.m11 - mat.m9,
+            .w = mat.m15 - mat.m13,
+        };
+        // Near plane
+        frustum.planes[4] = .{
+            .x = mat.m3 + mat.m2,
+            .y = mat.m7 + mat.m6,
+            .z = mat.m11 + mat.m10,
+            .w = mat.m15 + mat.m14,
+        };
+        // Far plane
+        frustum.planes[5] = .{
+            .x = mat.m3 - mat.m2,
+            .y = mat.m7 - mat.m6,
+            .z = mat.m11 - mat.m10,
+            .w = mat.m15 - mat.m14,
+        };
+
+        // Normalize planes
+        for (&frustum.planes) |*plane| {
+            const length = @sqrt(plane.x * plane.x + plane.y * plane.y + plane.z * plane.z);
+            plane.x /= length;
+            plane.y /= length;
+            plane.z /= length;
+            plane.w /= length;
+        }
+
+        return frustum;
+    }
+
+    pub fn containsCube(self: Frustum, center: rl.Vector3, half_size: f32) bool {
+        const min = rl.Vector3{
+            .x = center.x - half_size,
+            .y = center.y - half_size,
+            .z = center.z - half_size,
+        };
+        const max = rl.Vector3{
+            .x = center.x + half_size,
+            .y = center.y + half_size,
+            .z = center.z + half_size,
+        };
+
+        for (self.planes) |plane| {
+            // Find farthest point from plane
+            const x = if (plane.x > 0) max.x else min.x;
+            const y = if (plane.y > 0) max.y else min.y;
+            const z = if (plane.z > 0) max.z else min.z;
+
+            // Calculate distance
+            const distance = plane.x * x + plane.y * y + plane.z * z + plane.w;
+            if (distance < 0) return false;
+        }
+        return true;
+    }
 };
-
-pub fn extractFrustum(camera: rl.Camera3D, screen_width: f32, screen_height: f32) Frustum {
-    // Get view and projection matrices
-    const view = rl.getCameraMatrix(camera);
-    const aspect = screen_width / screen_height;
-    const projection = rl.Matrix.perspective(camera.fovy, aspect, 0.01, 1000.0);
-    const view_proj = view.multiply(projection);
-
-    var frustum = Frustum{};
-
-    // Left plane (column-major order)
-    frustum.planes[0] = Plane{
-        .normal = .{ .x = view_proj.m3 + view_proj.m0, .y = view_proj.m7 + view_proj.m4, .z = view_proj.m11 + view_proj.m8 },
-        .distance = view_proj.m15 + view_proj.m12,
-    };
-    // Right plane
-    frustum.planes[1] = Plane{
-        .normal = .{ .x = view_proj.m3 - view_proj.m0, .y = view_proj.m7 - view_proj.m4, .z = view_proj.m11 - view_proj.m8 },
-        .distance = view_proj.m15 - view_proj.m12,
-    };
-    // Bottom plane
-    frustum.planes[2] = Plane{
-        .normal = .{ .x = view_proj.m3 + view_proj.m1, .y = view_proj.m7 + view_proj.m5, .z = view_proj.m11 + view_proj.m9 },
-        .distance = view_proj.m15 + view_proj.m13,
-    };
-    // Top plane
-    frustum.planes[3] = Plane{
-        .normal = .{ .x = view_proj.m3 - view_proj.m1, .y = view_proj.m7 - view_proj.m5, .z = view_proj.m11 - view_proj.m9 },
-        .distance = view_proj.m15 - view_proj.m13,
-    };
-    // Near plane
-    frustum.planes[4] = Plane{
-        .normal = .{ .x = view_proj.m3 + view_proj.m2, .y = view_proj.m7 + view_proj.m6, .z = view_proj.m11 + view_proj.m10 },
-        .distance = view_proj.m15 + view_proj.m14,
-    };
-    // Far plane
-    frustum.planes[5] = Plane{
-        .normal = .{ .x = view_proj.m3 - view_proj.m2, .y = view_proj.m7 - view_proj.m6, .z = view_proj.m11 - view_proj.m10 },
-        .distance = view_proj.m15 - view_proj.m14,
-    };
-
-    // Normalize planes
-    for (&frustum.planes) |*plane| {
-        const length = @sqrt(plane.normal.x * plane.normal.x +
-            plane.normal.y * plane.normal.y +
-            plane.normal.z * plane.normal.z);
-        plane.normal.x /= length;
-        plane.normal.y /= length;
-        plane.normal.z /= length;
-        plane.distance /= length;
-    }
-
-    return frustum;
-}
-
-pub fn isCubeInFrustum(frustum: Frustum, pos: rl.Vector3) bool {
-    const cube_half_size = 0.5; // For 1x1x1 cubes
-    const cube_max = rl.Vector3{
-        .x = pos.x + cube_half_size,
-        .y = pos.y + cube_half_size,
-        .z = pos.z + cube_half_size,
-    };
-
-    for (frustum.planes) |plane| {
-        const dist = plane.normal.x * cube_max.x + plane.normal.y * cube_max.y + plane.normal.z * cube_max.z + plane.distance;
-        if (dist < 0) return false; // Cube is outside the plane
-    }
-    return true;
-}
