@@ -1,10 +1,14 @@
 const std = @import("std");
 const rl = @import("raylib");
+const fr = @import("frustum.zig");
 
 const GRID_SIZE = 50;
+const SCALE = 0.5; // Smaller scale for smoother terrain
+const SCREEN_WIDTH = 1280;
+const SCREEN_HEIGHT = 720;
 
-pub fn main() !void {
-    rl.initWindow(1280, 720, "ZigCraft");
+pub fn main() void {
+    rl.initWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "ZigCraft");
     defer rl.closeWindow();
 
     rl.setTargetFPS(60);
@@ -12,14 +16,14 @@ pub fn main() !void {
     rl.disableCursor();
 
     var camera = rl.Camera3D{
-        .position = rl.Vector3.init(10, 10, 10),
+        .position = rl.Vector3.init(25, 25, 25),
         .target = rl.Vector3.init(0, 0, 0),
         .up = rl.Vector3.init(0, 1, 0),
         .fovy = 45,
         .projection = rl.CameraProjection.perspective,
     };
 
-    const terrain = try generateTerrain();
+    const terrain = generateTerrain();
     var is_cursor_on = false;
 
     while (!rl.windowShouldClose()) {
@@ -36,41 +40,92 @@ pub fn main() !void {
             }
         }
 
+        if (rl.isKeyPressed(rl.KeyboardKey.f11)) {
+            rl.toggleFullscreen();
+        }
+
+        // Extract frustum planes once per frame
+        const frustum = fr.extractFrustum(
+            camera,
+            @floatFromInt(rl.getScreenWidth()),
+            @floatFromInt(rl.getScreenHeight()),
+        );
+
         rl.beginDrawing();
         defer rl.endDrawing();
 
-        rl.clearBackground(rl.Color.ray_white);
+        rl.clearBackground(rl.Color.black);
         rl.beginMode3D(camera);
-        defer rl.endMode3D();
+        defer {
+            rl.endMode3D();
 
+            // Draw FPS counter at top-left
+            const fps_text = rl.textFormat("FPS: %d", .{rl.getFPS()});
+            rl.drawText(fps_text, 10, 10, 20, rl.Color.red);
+        }
+
+        // Draw the terrain
         for (terrain, 0..) |row, x| {
-            for (row, 0..) |height, y| {
-                const pos = rl.Vector3.init(@floatFromInt(x), height, @floatFromInt(y));
-                rl.drawCube(pos, 1, 1, 1, rl.Color.green);
-                rl.drawCubeWires(pos, 1, 1, 1, rl.Color.black);
+            for (row, 0..) |height, z| {
+                // Stack blocks from Y=0 to Y=height
+                for (0..height) |y| {
+                    const pos = rl.Vector3.init(@floatFromInt(x), @floatFromInt(y), @floatFromInt(z));
+
+                    // Skip rendering if block is outside the frustum
+                    if (!fr.isCubeInFrustum(frustum, pos)) continue;
+
+                    const color = if (y == height - 1) rl.Color.green else rl.Color.brown;
+                    rl.drawCube(pos, 1, 1, 1, color);
+                    rl.drawCubeWires(pos, 1, 1, 1, rl.Color.black);
+                }
             }
         }
     }
 }
 
-fn perlinNoise(x: f32, y: f32) !f32 {
+fn noise(x: f32, y: f32) f32 {
     var prng = std.rand.DefaultPrng.init(blk: {
         var seed: u64 = undefined;
-        try std.posix.getrandom(std.mem.asBytes(&seed));
+        std.posix.getrandom(std.mem.asBytes(&seed)) catch {
+            seed = 1;
+        };
         break :blk seed;
     });
     const rand = prng.random();
 
     const scale = rand.float(f32);
-    return @sin(x) * @cos(y) * scale;
+    return @sin(x * 0.1) * @cos(y * 0.1) + @sin(y * 0.05) * @cos(x * 0.05) * scale;
 }
 
-fn generateTerrain() ![GRID_SIZE][GRID_SIZE]f32 {
-    var terrain: [GRID_SIZE][GRID_SIZE]f32 = undefined;
-    for (terrain, 0..) |row, x| {
-        for (row, 0..) |_, y| {
-            const height = try perlinNoise(@floatFromInt(x), @floatFromInt(y));
-            terrain[x][y] = height;
+fn fractalNoise(x: f32, y: f32, octaves: u32, persistence: f32) f32 {
+    var total: f32 = 0.0;
+    var frequency: f32 = 1.0;
+    var amplitude: f32 = 1.0;
+    var max_value: f32 = 0.0;
+
+    for (0..octaves) |_| {
+        total += noise(x * frequency, y * frequency) * amplitude;
+        max_value += amplitude;
+        amplitude *= persistence;
+        frequency *= 2.0;
+    }
+
+    return total / max_value; // Normalize to [-1, 1]
+}
+
+fn generateHeight(x: f32, y: f32) u32 {
+    // Generate fractal noise and convert to a positive integer height
+    const noise_value = fractalNoise(x, y, 4, 0.5);
+    const scaled_height = std.math.pow(f32, @abs(noise_value), 1.2) * 10.0 + 10.0; // Offset to avoid negative heights
+    return @intFromFloat(@max(scaled_height, 0.0));
+}
+
+fn generateTerrain() [GRID_SIZE][GRID_SIZE]u32 {
+    var terrain: [GRID_SIZE][GRID_SIZE]u32 = undefined;
+    for (&terrain, 0..) |*row, x| {
+        for (row, 0..) |_, z| {
+            const height = generateHeight(@as(f32, @floatFromInt(x)) * SCALE, @as(f32, @floatFromInt(z)) * SCALE);
+            row[z] = height;
         }
     }
     return terrain;
