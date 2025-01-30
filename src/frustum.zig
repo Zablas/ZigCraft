@@ -65,11 +65,6 @@ pub fn extractFrustum(camera: rl.Camera3D, screen_width: f32, screen_height: f32
 
 pub fn isCubeInFrustum(frustum: Frustum, pos: rl.Vector3) bool {
     const cube_half_size = 0.5; // For 1x1x1 cubes
-    // const cube_min = rl.Vector3{
-    //     .x = pos.x - cube_half_size,
-    //     .y = pos.y - cube_half_size,
-    //     .z = pos.z - cube_half_size,
-    // };
     const cube_max = rl.Vector3{
         .x = pos.x + cube_half_size,
         .y = pos.y + cube_half_size,
