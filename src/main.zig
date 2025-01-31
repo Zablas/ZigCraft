@@ -10,7 +10,6 @@ pub fn main() void {
     rl.initWindow(cnst.SCREEN_WIDTH, cnst.SCREEN_HEIGHT, "ZigCraft");
     defer rl.closeWindow();
 
-    rl.setTargetFPS(60);
     rl.setExitKey(rl.KeyboardKey.null);
     rl.disableCursor();
 

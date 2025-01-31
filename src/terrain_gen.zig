@@ -15,9 +15,7 @@ pub fn generateTerrain() [cnst.GRID_SIZE][cnst.GRID_SIZE]u32 {
 fn noise(x: f32, y: f32) f32 {
     var prng = std.rand.DefaultPrng.init(blk: {
         var seed: u64 = undefined;
-        std.posix.getrandom(std.mem.asBytes(&seed)) catch {
-            seed = 1;
-        };
+        std.crypto.random.bytes(std.mem.asBytes(&seed));
         break :blk seed;
     });
     const rand = prng.random();

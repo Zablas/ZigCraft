@@ -26,6 +26,10 @@ pub fn handleInput(
         rl.toggleFullscreen();
     }
 
+    if (is_cursor_on.*) {
+        return;
+    }
+
     const delta_time = rl.getFrameTime();
 
     // ========== Mouse Input (Camera Rotation) ==========
