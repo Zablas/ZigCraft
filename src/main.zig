@@ -11,7 +11,7 @@ pub fn main() void {
     defer rl.closeWindow();
 
     rl.setExitKey(rl.KeyboardKey.null);
-    rl.disableCursor();
+    // rl.disableCursor();
 
     var camera = rl.Camera3D{
         .position = rl.Vector3.init(25, 25, 25),
