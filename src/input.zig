@@ -47,7 +47,7 @@ pub fn handleInput(
 
     // ========== Keyboard Input (Movement) ==========
     var move_dir = rl.Vector3.zero();
-    if (rl.isKeyDown(rl.KeyboardKey.w)) move_dir = move_dir.add(front);
+    if (rl.isKeyDown(rl.KeyboardKey.w)) move_dir = move_dir.add(.{ .x = front.x, .y = 0, .z = front.z });
     if (rl.isKeyDown(rl.KeyboardKey.s)) move_dir = move_dir.subtract(.{ .x = front.x, .y = 0, .z = front.z });
     if (rl.isKeyDown(rl.KeyboardKey.a)) move_dir = move_dir.subtract(front.crossProduct(camera.up).normalize());
     if (rl.isKeyDown(rl.KeyboardKey.d)) move_dir = move_dir.add(front.crossProduct(camera.up).normalize());
