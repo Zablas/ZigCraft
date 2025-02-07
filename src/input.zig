@@ -52,95 +52,116 @@ pub fn handleInput(
     if (rl.isKeyDown(rl.KeyboardKey.a)) move_dir = move_dir.subtract(front.crossProduct(camera.up).normalize());
     if (rl.isKeyDown(rl.KeyboardKey.d)) move_dir = move_dir.add(front.crossProduct(camera.up).normalize());
 
+    // ========== JUMP HANDLING (MUST COME FIRST) ==========
+    if (on_ground.* and rl.isKeyPressed(rl.KeyboardKey.space)) {
+        velocity_y.* = cnst.JUMP_FORCE;
+        on_ground.* = false;
+    }
+
     // ========== Horizontal Movement with Collisions ==========
     if (move_dir.length() > 0) {
         move_dir = move_dir.normalize().scale(5.0 * delta_time);
 
+        // Apply air control reduction
+        if (!on_ground.*) {
+            move_dir = move_dir.scale(cnst.AIR_CONTROL);
+        }
+
+        // Split movement into components
         const original_pos = camera.position;
-        const player_feet_y = original_pos.y - cnst.PLAYER_HEIGHT + 0.1; // +0.1 for FP epsilon
+        var new_pos = original_pos;
 
-        // X-axis movement check
-        const new_x = original_pos.x + move_dir.x;
-        var blocked_x = false;
-
-        const x_edge = if (move_dir.x > 0) new_x + cnst.PLAYER_RADIUS else new_x - cnst.PLAYER_RADIUS;
-
-        const x_block: usize = @intFromFloat(@floor(x_edge + 0.5));
-        const z_start = @floor(original_pos.z - cnst.PLAYER_RADIUS + 0.5);
-        const z_end = @floor(original_pos.z + cnst.PLAYER_RADIUS + 0.5);
-
-        // Check all relevant Z positions
-        var zb = z_start;
-        while (zb <= z_end and !blocked_x) : (zb += 1) {
-            if (x_block >= 0 and x_block < cnst.GRID_SIZE and zb >= 0 and zb < cnst.GRID_SIZE) {
-                const terrain_height: f32 = @floatFromInt(terrain[@as(usize, x_block)][@as(usize, @intFromFloat(zb))]);
-                // Block if terrain is higher than step height allows
-                if (terrain_height > player_feet_y + cnst.STEP_HEIGHT) {
-                    blocked_x = true;
-                }
-            }
+        // X-axis movement with collision
+        new_pos.x += move_dir.x;
+        if (checkCollision(new_pos, terrain)) {
+            new_pos.x = original_pos.x;
         }
 
-        // Apply X movement if not blocked
-        if (!blocked_x) {
-            camera.position.x = new_x;
+        // Z-axis movement with collision
+        new_pos.z += move_dir.z;
+        if (checkCollision(new_pos, terrain)) {
+            new_pos.z = original_pos.z;
         }
 
-        // Z-axis movement check (using updated X position)
-        const new_z = camera.position.z + move_dir.z;
-        var blocked_z = false;
-
-        const z_edge = if (move_dir.z > 0) new_z + cnst.PLAYER_RADIUS else new_z - cnst.PLAYER_RADIUS;
-
-        const z_block: usize = @intFromFloat(@floor(z_edge + 0.5));
-        const x_start = @floor(camera.position.x - cnst.PLAYER_RADIUS + 0.5);
-        const x_end = @floor(camera.position.x + cnst.PLAYER_RADIUS + 0.5);
-
-        // Check all relevant X positions
-        var xb = x_start;
-        while (xb <= x_end and !blocked_z) : (xb += 1) {
-            if (xb >= 0 and xb < cnst.GRID_SIZE and z_block >= 0 and z_block < cnst.GRID_SIZE) {
-                const terrain_height: f32 = @floatFromInt(terrain[@as(usize, @intFromFloat(xb))][@as(usize, z_block)]);
-                // Block if terrain is higher than step height allows
-                if (terrain_height > player_feet_y + cnst.STEP_HEIGHT) {
-                    blocked_z = true;
-                }
-            }
-        }
-
-        if (!blocked_z) {
-            camera.position.z = new_z;
-        }
+        camera.position = new_pos;
     }
 
-    // ========== Jumping & Gravity ==========
-    velocity_y.* -= cnst.GRAVITY * delta_time;
-    camera.position.y += velocity_y.* * delta_time;
+    // ========== VERTICAL PHYSICS ==========
+    if (!on_ground.*) {
+        velocity_y.* -= cnst.GRAVITY * delta_time;
+        camera.position.y += velocity_y.* * delta_time;
+    }
 
-    // ========== Ground Collision ==========
-    const block_x: usize = @intFromFloat(@floor(camera.position.x));
-    const block_z: usize = @intFromFloat(@floor(camera.position.z));
+    // ========== GROUND COLLISION ==========
+    const ground_check = findHighestGround(camera.position, terrain);
     on_ground.* = false;
 
-    if (block_x >= 0 and block_x < cnst.GRID_SIZE and block_z >= 0 and block_z < cnst.GRID_SIZE) {
-        const terrain_height = terrain[block_x][block_z];
-        const ground_y = @as(f32, @floatFromInt(terrain_height));
-        const player_feet = camera.position.y - cnst.PLAYER_HEIGHT;
-
-        // Allow stepping up/down within STEP_HEIGHT
-        if (player_feet <= ground_y + cnst.STEP_HEIGHT and player_feet >= ground_y - 0.1) { // Allow small downward steps
-            on_ground.* = true;
-            velocity_y.* = 0;
-            // Snap to ground if within step range
-            camera.position.y = ground_y + cnst.PLAYER_HEIGHT;
-        }
+    // Check if we're within step height range
+    if (camera.position.y - cnst.PLAYER_HEIGHT <= ground_check.highest + cnst.GROUND_TOLERANCE and
+        camera.position.y - cnst.PLAYER_HEIGHT >= ground_check.highest - cnst.STEP_HEIGHT)
+    {
+        on_ground.* = true;
+        velocity_y.* = 0;
+        camera.position.y = ground_check.highest + cnst.PLAYER_HEIGHT;
     }
 
-    // Jump input
-    if (on_ground.* and rl.isKeyPressed(rl.KeyboardKey.space)) {
-        velocity_y.* = cnst.JUMP_FORCE;
+    // ========== FALLING COLLISION ==========
+    if (!on_ground.* and velocity_y.* < 0) {
+        if (camera.position.y - cnst.PLAYER_HEIGHT <= ground_check.highest) {
+            camera.position.y = ground_check.highest + cnst.PLAYER_HEIGHT;
+            on_ground.* = true;
+            velocity_y.* = 0;
+        }
     }
 
     // Update camera target
     camera.target = camera.position.add(front);
+}
+
+// Helper function: Check collision for horizontal movement
+fn checkCollision(pos: rl.Vector3, terrain: [cnst.GRID_SIZE][cnst.GRID_SIZE]u32) bool {
+    const player_feet = pos.y - cnst.PLAYER_HEIGHT;
+    const player_top = pos.y;
+
+    // Check collision area
+    const min_x = @floor(pos.x - cnst.PLAYER_RADIUS);
+    const max_x = @floor(pos.x + cnst.PLAYER_RADIUS);
+    const min_z = @floor(pos.z - cnst.PLAYER_RADIUS);
+    const max_z = @floor(pos.z + cnst.PLAYER_RADIUS);
+
+    var xb = min_x;
+    while (xb <= max_x) : (xb += 1) {
+        var zb = min_z;
+        while (zb <= max_z) : (zb += 1) {
+            if (xb >= 0 and xb < cnst.GRID_SIZE and zb >= 0 and zb < cnst.GRID_SIZE) {
+                const block_height: f32 = @floatFromInt(terrain[@intFromFloat(xb)][@intFromFloat(zb)]);
+                // Block if terrain is within player's vertical space
+                if (block_height > player_feet and block_height < player_top) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+// Helper function: Find highest ground
+fn findHighestGround(pos: rl.Vector3, terrain: [cnst.GRID_SIZE][cnst.GRID_SIZE]u32) struct { highest: f32 } {
+    var highest: f32 = -math.inf(f32);
+    const min_x = @floor(pos.x - cnst.PLAYER_RADIUS);
+    const max_x = @floor(pos.x + cnst.PLAYER_RADIUS);
+    const min_z = @floor(pos.z - cnst.PLAYER_RADIUS);
+    const max_z = @floor(pos.z + cnst.PLAYER_RADIUS);
+
+    var xb = min_x;
+    while (xb <= max_x) : (xb += 1) {
+        var zb = min_z;
+        while (zb <= max_z) : (zb += 1) {
+            if (xb >= 0 and xb < cnst.GRID_SIZE and zb >= 0 and zb < cnst.GRID_SIZE) {
+                const h: f32 = @floatFromInt(terrain[@intFromFloat(xb)][@intFromFloat(zb)]);
+                if (h > highest) highest = h;
+            }
+        }
+    }
+    return .{ .highest = highest };
 }
