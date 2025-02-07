@@ -14,3 +14,4 @@ pub const GRAVITY = 26;
 pub const JUMP_FORCE = 9.0;
 pub const GROUND_TOLERANCE = 0.05;
 pub const AIR_CONTROL = 0.35; // Reduced control while airborne
+pub const BLOCK_CENTER_OFFSET = 0.5; // Blocks are centered at integer coordinates

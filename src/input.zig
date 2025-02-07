@@ -123,19 +123,23 @@ fn checkCollision(pos: rl.Vector3, terrain: [cnst.GRID_SIZE][cnst.GRID_SIZE]u32)
     const player_feet = pos.y - cnst.PLAYER_HEIGHT;
     const player_top = pos.y;
 
-    // Check collision area
-    const min_x = @floor(pos.x - cnst.PLAYER_RADIUS);
-    const max_x = @floor(pos.x + cnst.PLAYER_RADIUS);
-    const min_z = @floor(pos.z - cnst.PLAYER_RADIUS);
-    const max_z = @floor(pos.z + cnst.PLAYER_RADIUS);
+    // Convert world coordinates to block grid with center alignment
+    const min_x = @floor((pos.x - cnst.PLAYER_RADIUS) + cnst.BLOCK_CENTER_OFFSET);
+    const max_x = @floor((pos.x + cnst.PLAYER_RADIUS) + cnst.BLOCK_CENTER_OFFSET);
+    const min_z = @floor((pos.z - cnst.PLAYER_RADIUS) + cnst.BLOCK_CENTER_OFFSET);
+    const max_z = @floor((pos.z + cnst.PLAYER_RADIUS) + cnst.BLOCK_CENTER_OFFSET);
 
     var xb = min_x;
     while (xb <= max_x) : (xb += 1) {
         var zb = min_z;
         while (zb <= max_z) : (zb += 1) {
-            if (xb >= 0 and xb < cnst.GRID_SIZE and zb >= 0 and zb < cnst.GRID_SIZE) {
-                const block_height: f32 = @floatFromInt(terrain[@intFromFloat(xb)][@intFromFloat(zb)]);
-                // Block if terrain is within player's vertical space
+            // Convert back to array indices
+            const block_x = @as(usize, @intFromFloat(xb + cnst.BLOCK_CENTER_OFFSET));
+            const block_z = @as(usize, @intFromFloat(zb + cnst.BLOCK_CENTER_OFFSET));
+
+            if (block_x < cnst.GRID_SIZE and block_z < cnst.GRID_SIZE) {
+                const block_height: f32 = @floatFromInt(terrain[block_x][block_z]);
+                // Check collision in both vertical directions
                 if (block_height > player_feet and block_height < player_top) {
                     return true;
                 }
@@ -148,17 +152,23 @@ fn checkCollision(pos: rl.Vector3, terrain: [cnst.GRID_SIZE][cnst.GRID_SIZE]u32)
 // Helper function: Find highest ground
 fn findHighestGround(pos: rl.Vector3, terrain: [cnst.GRID_SIZE][cnst.GRID_SIZE]u32) struct { highest: f32 } {
     var highest: f32 = -math.inf(f32);
-    const min_x = @floor(pos.x - cnst.PLAYER_RADIUS);
-    const max_x = @floor(pos.x + cnst.PLAYER_RADIUS);
-    const min_z = @floor(pos.z - cnst.PLAYER_RADIUS);
-    const max_z = @floor(pos.z + cnst.PLAYER_RADIUS);
+
+    // Convert to block grid with center alignment
+    const min_x = @floor((pos.x - cnst.PLAYER_RADIUS) + cnst.BLOCK_CENTER_OFFSET);
+    const max_x = @floor((pos.x + cnst.PLAYER_RADIUS) + cnst.BLOCK_CENTER_OFFSET);
+    const min_z = @floor((pos.z - cnst.PLAYER_RADIUS) + cnst.BLOCK_CENTER_OFFSET);
+    const max_z = @floor((pos.z + cnst.PLAYER_RADIUS) + cnst.BLOCK_CENTER_OFFSET);
 
     var xb = min_x;
     while (xb <= max_x) : (xb += 1) {
         var zb = min_z;
         while (zb <= max_z) : (zb += 1) {
-            if (xb >= 0 and xb < cnst.GRID_SIZE and zb >= 0 and zb < cnst.GRID_SIZE) {
-                const h: f32 = @floatFromInt(terrain[@intFromFloat(xb)][@intFromFloat(zb)]);
+            // Convert back to array indices
+            const block_x = @as(usize, @intFromFloat(xb + cnst.BLOCK_CENTER_OFFSET));
+            const block_z = @as(usize, @intFromFloat(zb + cnst.BLOCK_CENTER_OFFSET));
+
+            if (block_x < cnst.GRID_SIZE and block_z < cnst.GRID_SIZE) {
+                const h: f32 = @floatFromInt(terrain[block_x][block_z]);
                 if (h > highest) highest = h;
             }
         }
