@@ -96,21 +96,27 @@ pub fn handleInput(
     const ground_check = findHighestGround(camera.position, terrain);
     on_ground.* = false;
 
-    // Check if we're within step height range
+    // Revised ground detection with better range handling
     if (camera.position.y - cnst.PLAYER_HEIGHT <= ground_check.highest + cnst.GROUND_TOLERANCE and
-        camera.position.y - cnst.PLAYER_HEIGHT >= ground_check.highest - cnst.STEP_HEIGHT)
+        camera.position.y - cnst.PLAYER_HEIGHT >= ground_check.highest - cnst.MAX_SINK_DEPTH)
     {
         on_ground.* = true;
         velocity_y.* = 0;
-        camera.position.y = ground_check.highest + cnst.PLAYER_HEIGHT;
+        // Snap with safety margin to prevent sinking
+        camera.position.y = ground_check.highest + cnst.PLAYER_HEIGHT + cnst.GROUND_SNAP_OFFSET;
     }
 
-    // ========== FALLING COLLISION ==========
+    // ========== ENHANCED FALLING COLLISION ==========
     if (!on_ground.* and velocity_y.* < 0) {
-        if (camera.position.y - cnst.PLAYER_HEIGHT <= ground_check.highest) {
-            camera.position.y = ground_check.highest + cnst.PLAYER_HEIGHT;
+        // Get fresh ground data after movement
+        const updated_ground = findHighestGround(camera.position, terrain);
+
+        // Check full collision volume, not just feet
+        if (camera.position.y - cnst.PLAYER_HEIGHT <= updated_ground.highest) {
             on_ground.* = true;
             velocity_y.* = 0;
+            // Force precise ground alignment
+            camera.position.y = updated_ground.highest + cnst.PLAYER_HEIGHT + cnst.GROUND_SNAP_OFFSET;
         }
     }
 
@@ -153,7 +159,7 @@ fn checkCollision(pos: rl.Vector3, terrain: [cnst.GRID_SIZE][cnst.GRID_SIZE]u32)
 fn findHighestGround(pos: rl.Vector3, terrain: [cnst.GRID_SIZE][cnst.GRID_SIZE]u32) struct { highest: f32 } {
     var highest: f32 = -math.inf(f32);
 
-    // Convert to block grid with center alignment
+    // Expanded search area with overlap
     const min_x = @floor((pos.x - cnst.PLAYER_RADIUS) + cnst.BLOCK_CENTER_OFFSET);
     const max_x = @floor((pos.x + cnst.PLAYER_RADIUS) + cnst.BLOCK_CENTER_OFFSET);
     const min_z = @floor((pos.z - cnst.PLAYER_RADIUS) + cnst.BLOCK_CENTER_OFFSET);
@@ -163,7 +169,6 @@ fn findHighestGround(pos: rl.Vector3, terrain: [cnst.GRID_SIZE][cnst.GRID_SIZE]u
     while (xb <= max_x) : (xb += 1) {
         var zb = min_z;
         while (zb <= max_z) : (zb += 1) {
-            // Convert back to array indices
             const block_x = @as(usize, @intFromFloat(xb + cnst.BLOCK_CENTER_OFFSET));
             const block_z = @as(usize, @intFromFloat(zb + cnst.BLOCK_CENTER_OFFSET));
 
