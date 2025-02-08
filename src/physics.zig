@@ -116,8 +116,8 @@ fn checkCollision(pos: rl.Vector3, terrain: [cnst.GRID_SIZE][cnst.GRID_SIZE]u32)
     while (xb <= max_x and !collision) : (xb += 1) {
         var zb = min_z;
         while (zb <= max_z and !collision) : (zb += 1) {
-            const block_x = @as(usize, @intFromFloat(xb + cnst.BLOCK_CENTER_OFFSET));
-            const block_z = @as(usize, @intFromFloat(zb + cnst.BLOCK_CENTER_OFFSET));
+            const block_x: usize = @intFromFloat(xb + cnst.BLOCK_CENTER_OFFSET);
+            const block_z: usize = @intFromFloat(zb + cnst.BLOCK_CENTER_OFFSET);
 
             if (block_x < cnst.GRID_SIZE and block_z < cnst.GRID_SIZE) {
                 const block_height: f32 = @floatFromInt(terrain[block_x][block_z]);
