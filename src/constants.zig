@@ -17,3 +17,4 @@ pub const AIR_CONTROL = 0.35; // Reduced control while airborne
 pub const BLOCK_CENTER_OFFSET = 0.5; // Blocks are centered at integer coordinates
 pub const MAX_SINK_DEPTH = 0.2; // Allow snapping even if slightly sunk
 pub const GROUND_SNAP_OFFSET = 0.01; // Safety margin above ground
+pub const MAX_STEP_DELTA = 1.6; // Maximum vertical difference allowed when moving

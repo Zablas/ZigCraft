@@ -62,28 +62,45 @@ pub fn handleInput(
     if (move_dir.length() > 0) {
         move_dir = move_dir.normalize().scale(5.0 * delta_time);
 
-        // Apply air control reduction
-        if (!on_ground.*) {
-            move_dir = move_dir.scale(cnst.AIR_CONTROL);
-        }
-
-        // Split movement into components
         const original_pos = camera.position;
-        var new_pos = original_pos;
+        const current_ground = findHighestGround(original_pos, terrain).highest;
 
-        // X-axis movement with collision
-        new_pos.x += move_dir.x;
-        if (checkCollision(new_pos, terrain)) {
-            new_pos.x = original_pos.x;
+        // Temporary position for collision checks
+        var temp_pos = original_pos;
+
+        // X-axis movement
+        temp_pos.x += move_dir.x;
+        var blocked_x = checkCollision(temp_pos, terrain);
+
+        // Check ground height difference for X movement
+        if (!blocked_x) {
+            const new_ground_x = findHighestGround(temp_pos, terrain).highest;
+            if (new_ground_x - current_ground > cnst.MAX_STEP_DELTA) {
+                blocked_x = true;
+            }
         }
 
-        // Z-axis movement with collision
-        new_pos.z += move_dir.z;
-        if (checkCollision(new_pos, terrain)) {
-            new_pos.z = original_pos.z;
+        if (!blocked_x) {
+            camera.position.x = temp_pos.x;
         }
 
-        camera.position = new_pos;
+        // Z-axis movement (use updated X position)
+        temp_pos = camera.position;
+        temp_pos.z += move_dir.z;
+        var blocked_z = checkCollision(temp_pos, terrain);
+
+        // Check ground height difference for Z movement
+        if (!blocked_z) {
+            const new_ground_z = findHighestGround(temp_pos, terrain).highest;
+            const current_ground_z = findHighestGround(camera.position, terrain).highest;
+            if (new_ground_z - current_ground_z > cnst.MAX_STEP_DELTA) {
+                blocked_z = true;
+            }
+        }
+
+        if (!blocked_z) {
+            camera.position.z = temp_pos.z;
+        }
     }
 
     // ========== VERTICAL PHYSICS ==========
@@ -129,30 +146,31 @@ fn checkCollision(pos: rl.Vector3, terrain: [cnst.GRID_SIZE][cnst.GRID_SIZE]u32)
     const player_feet = pos.y - cnst.PLAYER_HEIGHT;
     const player_top = pos.y;
 
-    // Convert world coordinates to block grid with center alignment
+    // Check collision area with block center alignment
     const min_x = @floor((pos.x - cnst.PLAYER_RADIUS) + cnst.BLOCK_CENTER_OFFSET);
     const max_x = @floor((pos.x + cnst.PLAYER_RADIUS) + cnst.BLOCK_CENTER_OFFSET);
     const min_z = @floor((pos.z - cnst.PLAYER_RADIUS) + cnst.BLOCK_CENTER_OFFSET);
     const max_z = @floor((pos.z + cnst.PLAYER_RADIUS) + cnst.BLOCK_CENTER_OFFSET);
 
+    var collision = false;
+
     var xb = min_x;
-    while (xb <= max_x) : (xb += 1) {
+    while (xb <= max_x and !collision) : (xb += 1) {
         var zb = min_z;
-        while (zb <= max_z) : (zb += 1) {
-            // Convert back to array indices
+        while (zb <= max_z and !collision) : (zb += 1) {
             const block_x = @as(usize, @intFromFloat(xb + cnst.BLOCK_CENTER_OFFSET));
             const block_z = @as(usize, @intFromFloat(zb + cnst.BLOCK_CENTER_OFFSET));
 
             if (block_x < cnst.GRID_SIZE and block_z < cnst.GRID_SIZE) {
                 const block_height: f32 = @floatFromInt(terrain[block_x][block_z]);
-                // Check collision in both vertical directions
+                // Check if block intersects player's vertical space
                 if (block_height > player_feet and block_height < player_top) {
-                    return true;
+                    collision = true;
                 }
             }
         }
     }
-    return false;
+    return collision;
 }
 
 // Helper function: Find highest ground
