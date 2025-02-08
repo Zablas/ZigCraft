@@ -5,6 +5,7 @@ const fr = @import("frustum.zig");
 const cnst = @import("constants.zig");
 const trn = @import("terrain_gen.zig");
 const inpt = @import("input.zig");
+const ui = @import("ui.zig");
 
 pub fn main() void {
     rl.initWindow(cnst.SCREEN_WIDTH, cnst.SCREEN_HEIGHT, "ZigCraft");
@@ -50,6 +51,8 @@ pub fn main() void {
             // Draw FPS counter at top-left
             const fps_text = rl.textFormat("FPS: %d", .{rl.getFPS()});
             rl.drawText(fps_text, 10, 10, 20, rl.Color.red);
+
+            ui.drawCrosshair();
         }
 
         // Draw the terrain

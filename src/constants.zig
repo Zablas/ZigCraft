@@ -1,3 +1,5 @@
+const rl = @import("raylib");
+
 // Terrain constants
 pub const GRID_SIZE = 50;
 pub const SCALE = 0.5; // Smaller scale for smoother terrain
@@ -16,3 +18,8 @@ pub const BLOCK_CENTER_OFFSET = 0.5; // Blocks are centered at integer coordinat
 pub const MAX_SINK_DEPTH = 0.2; // Allow snapping even if slightly sunk
 pub const GROUND_SNAP_OFFSET = 0.01; // Safety margin above ground
 pub const MAX_STEP_DELTA = 1.6; // Maximum vertical difference allowed when moving
+
+// UI
+pub const CROSSHAIR_SIZE = 10.0;
+pub const CROSSHAIR_THICKNESS = 2.0;
+pub const CROSSHAIR_COLOR = rl.Color.light_gray;
